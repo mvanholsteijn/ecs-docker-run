@@ -1,0 +1,10 @@
+../bin/ecs-docker-run \
+  --generate-only \
+  -P \
+  oraxe \
+  | jq . > output/$(basename $0).json
+
+diff {output,expect}/$(basename $0).json 
+[ $? -ne 0 ] && echo ERROR: test $(basename $0) failed || echo INFO: test $(basename $0)  succeeded
+
+

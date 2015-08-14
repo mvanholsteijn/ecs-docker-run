@@ -1,0 +1,70 @@
+{
+  "family": "app-hellodb",
+  "containerDefinitions": [
+    {
+      "volumesFrom": [
+        "container-a",
+        "container-b"
+      ],
+      "portMappings": [
+        {
+          "hostPort": 1000,
+          "containerPort": 100
+        },
+        {
+          "hostPort": 1001,
+          "containerPort": 101,
+          "protocol": "udp"
+        },
+        {
+          "hostPort": 1002,
+          "containerPort": 102
+        }
+      ],
+      "command": [
+        "/srv/helloworld-db.py"
+      ],
+      "environment": [
+        {
+          "name": "SERVICE_NAME",
+          "value": "hellodb"
+        },
+        {
+          "name": "SERVICE_TAGS",
+          "value": "http"
+        },
+        {
+          "name": "MESSAGE",
+          "value": "Hello World"
+        }
+      ],
+      "links": [
+        "a:a",
+        "b:b"
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "host-path",
+          "containerPath": "/container/path",
+          "readOnly": false
+        }
+      ],
+      "entrypoint": [
+        "new-entry-point"
+      ],
+      "essential": true,
+      "memory": 256,
+      "name": "app-hellodb",
+      "cpu": 512,
+      "image": "cargonauts/helloworld-python"
+    }
+  ],
+  "volumes": [
+    {
+      "name": "host-path",
+      "host": {
+        "sourcePath": "/host/path"
+      }
+    }
+  ]
+}

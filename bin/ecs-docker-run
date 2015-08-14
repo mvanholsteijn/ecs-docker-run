@@ -1,0 +1,411 @@
+#!/bin/bash
+# A simple command line utility to run docker images on Amazon ECS. This utility will generate a task definition 
+# based upon the docker run command line options you are familiar with.
+#
+#  Copyright 2015 - Xebia Nederland B.V.
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# Author Mark van Holsteijn
+
+declare -a PUBLISH_PORTS 
+declare -a VOLUMES 
+declare -a VOLUMES_FROM 
+declare -a LINKS 
+declare -a ENVS
+CLUSTER=default
+WORKDIR=
+DOCKER_USER=
+ENTRYPOINT=
+EXPOSE_ALL_PORTS=
+ARGS=
+NAME=
+IMAGE=
+NUMBER_OF_INSTANCES=1
+MEMORY=256
+CPU_SHARES=100
+TASK_DEF=
+TASK_ARN=
+RUN_AS_SERVICE=0
+
+function ignore() {
+	echo "WARN: command line option $1 recoqnized but ignored " >&2
+}
+
+function parseDockerRunCmd() {
+
+	PUBLISH_PORTS=()
+	VOLUMES=()
+	VOLUMES_FROM=()
+	LINKS=()
+	ENVS=()
+
+	while [ $# -gt 0 ] ; do
+		case "$1" in
+		--generate-only) GENERATE_ONLY=1; shift;;
+		--number-of-instances) shift ; NUMBER_OF_INSTANCES="$1"; shift;;
+		--cluster) shift; CLUSTER="$1"; shift;;
+		--run-as-service) RUN_AS_SERVICE=1; shift;;
+		-t) ignore "$1"; shift;;
+		-it) ignore "$1"; shift;;
+		-ti) ignore "$1"; shift;;
+		-a) ignore "$1"; shift 2;;
+		-d|-d=*) ignore "$1"; shift;;
+		-i|-i=*) ignore "$1"; shift;;
+		--sig-proxy=*) ignore "$1"; shift;;
+		--sig-proxy) ignore "$1"; shift 2;;
+		--cidfile=*) ignore "$1"; shift;;
+		--cidfile) ignore "$1"; shift 2;;
+		--pid=*) ignore "$1"; shift;;
+		--uts=*) ignore "$1"; shift;;
+		--ipc=*) ignore "$1"; shift;;
+		--net=*) ignore "$1"; shift;;
+		--net) ignore "$1"; shift 2;;
+		--add-host=*) ignore "$1"; shift;;
+		--add-host) ignore "$1"; shift 2;;
+		--mac-address=*) ignore "$1"; shift;;
+		--mac-address) ignore "$1"; shift 2;;
+		--name) shift; NAME="$1" ; shift;;
+		--name=*) NAME="$(echo "$1" | sed -e 's/^[^=]*=//')" ; shift;;
+		--dns=*) ignore "$1"; shift;;
+		--dns) ignore "$1"; shift 2;;
+		--dns-search=*) ignore "$1"; shift;;
+		--dns-search) ignore "$1"; shift 2;;
+		--restart) ignore "$1"; shift 2;;
+		--restart=*) ignore "$1"; shift;;
+		--rm|--rm=*) ignore "$1"; shift;;
+		--security-opt) ignore "$1"; shift 2;;
+		--security-opt=*) ignore "$1"; shift;;
+		-m|--memory) shift ; MEMORY="$1" ; shift;;
+		-m=*|--memory=*) MEMORY="$(echo "$1" | sed -e 's/^[^=]*=//')" ; shift;;
+		--memory-swap=*) ignore "$1"; shift;;
+		--memory-swap) ignore "$1"; shift 2;;
+		-c|--cpu-shares) shift ; CPU_SHARES="$1"; shift;;
+		-c=*|--cpu-shares=*) CPU_SHARES="$(echo "$1" | sed -e 's/^[^=]*=//')" ; shift ;;
+		--cpuset-cpus=*) ignore "$1"; shift;;
+		--cpuset-cpus) ignore "$1"; shift 2;;
+		--cpuset-mems=*) ignore "$1"; shift;;
+		--cpuset-mems) ignore "$1"; shift 2;;
+		--cpu-quota=*) ignore "$1"; shift;;
+		--cpu-quota) ignore "$1"; shift 2;;
+		--blkio-weight) ignore "$1"; shift 2;;
+		--blkio-weight=*) ignore "$1"; shift ;;
+		--oom-kill-disable*) ignore "$1"; shift ;;
+		--cap-add=*) ignore "$1"; shift;;
+		--cap-add) ignore "$1"; shift 2;;
+		--cap-drop=*) ignore "$1"; shift 2;;
+		--cap-drop) ignore "$1"; shift 2;;
+		--privileged*) ignore "$1"; shift;;
+		--device=) ignore "$1"; shift ;;
+		--device) ignore "$1"; shift 2;;
+		--lxc-conf=*) ignore "$1"; shift ;;
+		--lxc-conf) ignore "$1"; shift 2;;
+		--log-driver) ignore "$1"; shift 2;;
+		--log-driver=) ignore "$1"; shift ;;
+		--log-opt=) ignore "$1"; shift ;;
+		--log-opt) ignore "$1"; shift 2;;
+		--entrypoint) shift ; ENTRYPOINT="$1"; shift ;;
+		--entrypoint=*) ENTRYPOINT="$(echo "$1" | sed -e 's/^[^=]*=//')" ; shift ;;
+		--expose*) ignore "$1"; shift ; shift;;
+		-P)  EXPOSE_ALL_PORTS=1; shift ;;
+		-p)  shift ;  PUBLISH_PORTS+=("$1") ; shift;;
+		-p=*)  PUBLISH_PORTS+=("$(echo "$1" | sed -e 's/^[^=]*=//')") ; shift;;
+		--link)  shift ; LINKS+=("$1") ; shift;;
+		--link=*) LINKS+=("$(echo "$1" | sed -e 's/^[^=]*=//')") ; shift;;
+		-e|--env) shift ; ENVS+=("$1") ; shift;;
+		-u) ignore "$1"; shift ; DOCKER_USER="$1" ; shift;;
+		-u=*) ignore "$1"; shift ; DOCKER_USR="$(echo "$1" | sed -e 's/^[^=]*=//')" ; shift;;
+		-w) ignore "$1"; shift ; WORKDIR=("$1") ; shift;;
+		-w=*) ignore "$1"; shift ;  WORKDIR="$("echo "$1" | sed -e 's/^[^=]*=//'")" ; shift;;
+		-v)  shift ;  VOLUMES+=("$1") ; shift;;
+		-v=*)  shift ;  VOLUMES+=("$(echo "$1" | sed -e 's/^[^=]*=//')") ; shift;;
+		--volumes-from)  shift ;  VOLUMES_FROM+=("$1") ; shift;;
+		--volumes-from=*)  VOLUMES_FROM+=("$(echo "$1" | sed -e 's/^[^=]*=//')") ; shift;;
+		-*)
+			if expr "$1" : '^--env=.*' > /dev/null ; then
+				ENVS+=("$(echo "$1" | sed -e 's/^[^=]*=//')") ; 
+			else
+				echo ERROR: ignoring Unknown option $1. >&2 
+			fi 
+			shift ;;
+		*)
+			IMAGE="$1"; shift;
+			break;;
+		esac
+	done
+	ARGS="$@"
+}
+
+function getDockerRun() {
+	set -- $(getExecStart $1)
+
+	DOCKER=0
+	while [ $# -gt 0 ] ; do
+		if [ "$1" == "/usr/bin/docker" -o "$1" == "docker" ] ; then
+			shift
+			DOCKER=1
+		elif [ $DOCKER -eq 1 ] ; then
+			if [ "$1" == "run" ] ; then
+				shift
+					parseDockerRunCmd $(echo $@ | sed -e 's/\( --?[a-z][a-z\-]*\)=/\1 /')
+				break
+			else	
+				echo ERROR expect docker run. Got docker "$1". 
+				exit 1
+			fi
+		else
+			shift
+		fi
+	done
+}
+
+function _generateTaskDef() {
+	echo { \"family\" : \"$NAME\" ,
+	echo \"containerDefinitions\" : [  
+	echo {
+		generateContainerDef
+	echo }
+	echo ] ,
+	generateVolumes
+	echo } 
+}
+
+function generateTaskDef() {
+	TASK_DEF="$(_generateTaskDef | jq .)"
+}
+
+function generateContainerDef() {
+	generateVolumesFromDef
+	generatePortMappingsDef
+	generateCommandDef
+	generateEnvironmentDef
+	generateLinkDef
+	generateMountPointsDef
+	generateImageDef
+}
+
+function generateVolumesFromDef() {
+	echo \"volumesFrom\" : [
+	COMMA=
+	for VOLUME in "${VOLUMES_FROM[@]}"; do
+		[ -n "$COMMA" ] && echo ','
+		echo -n \"$VOLUME\"
+		COMMA=1
+	done
+	echo ],
+}
+
+function generatePortMappingsDef() {
+	echo \"portMappings\" : [
+	COMMA=
+	if [ -n "$EXPOSE_ALL_PORTS" ] ; then
+		PORTS=$(docker inspect $IMAGE | jq -r '.[0].Config.ExposedPorts | keys | .[] | .')
+		for P in $PORTS; do
+			PORT=$(echo $P  | awk -F/ '{print $1}')
+			PROTOCOL=$(echo $P  | awk -F/ '{print $2}')
+			[ -n "$COMMA" ] && echo ','
+			echo {
+				echo  \"hostPort\": 0,
+				echo \"containerPort\" : $PORT
+				if [ $PROTOCOL != "tcp" ] ; then
+					echo , \"protocol\" : \"$PROTOCOL\"
+				fi
+			echo -n }
+			COMMA=1
+		done
+	fi
+	for P in ${PUBLISH_PORTS[@]}; do
+		LOCALHOST=$(echo $P | awk -F: '{ if (NF > 2) print $1}')
+		LOCALPORT=$(echo $P | awk -F: '{ if (NF > 2) print $2; else print $1;}')
+		CONTAINERPORT=$(echo $P | awk -F: '{ if (NF > 2) print $3; else print $2;}')
+		PORT=$(echo $CONTAINERPORT  | awk -F/ '{print $1}')
+		PROTOCOL=$(echo $CONTAINERPORT  | awk -F/ '{print $2}')
+		if [ -n "$LOCALHOST" ] ; then
+			echo WARN: ECS cannot bind to IP address $LOCALHOST for port $CONTAINERPORT >&2
+		fi
+
+		[ -n "$COMMA" ] && echo ','
+		echo {
+			echo  \"hostPort\": $LOCALPORT,
+			echo \"containerPort\" : $PORT
+			if [ -n "$PROTOCOL" -a "$PROTOCOL" != "tcp" ] ; then
+				echo , \"protocol\" : \"$PROTOCOL\"
+			fi
+		echo -n }
+		COMMA=1
+	done
+	echo ],
+}
+
+function generateCommandDef() {
+	echo \"command\": [
+	COMMA=
+	for ARG in $ARGS; do
+		[ -n "$COMMA" ] && echo ','
+		echo -n \"$ARG\"
+		COMMA=1
+	done
+	echo ],
+}
+
+function generateEnvironmentDef() {
+	echo \"environment\": [
+	COMMA=
+	for ENV in "${ENVS[@]}"; do
+		[ -n "$COMMA" ] && echo ','
+		echo {
+		  echo -n \"name\": \";echo -n $ENV | sed -e 's/[ \t]*=.*/",/' 
+		  echo -n \"value\": \";echo -n $ENV | sed -e 's/^[^=]*=//' -e 's/$/"/'
+		echo -n }
+		COMMA=1
+	done
+	      echo ],
+}
+
+
+function generateLinkDef() {
+      echo -n "\"links\": [ "
+COMMA=
+for LINK in ${LINKS[@]}; do 
+	[ -n "$COMMA" ] && echo -n ', '
+	echo -n \"$LINK\"
+	COMMA=1
+done
+echo ' ],'
+}
+
+function generateMountPointsDef() {
+      echo \"mountPoints\": [
+	COMMA=
+	for VOLUME in "${VOLUMES[@]}"; do
+		[ -n "$COMMA" ] && echo ','
+		HOSTPATH=$(echo $VOLUME | awk -F: '{print $1}' | sed -e 's/^\///' -e 's/\//-/g')
+		CONTAINERPATH=$(echo $VOLUME | awk -F: '{print $2}')
+		RW=$(echo $VOLUME | awk -F: '{if ($3 == "ro") print "true"; else print "false" ; }')
+		COMMA=1
+		echo {
+		  echo \"sourceVolume\": \"$HOSTPATH\",
+		  echo \"containerPath\": \"$CONTAINERPATH\",
+		  echo \"readOnly\": $RW
+		echo }
+	done
+	echo ],
+}
+
+function generateImageDef() {
+	if [ -n "$ENTRYPOINT" ] ; then
+		echo \"entrypoint\": [ \"$ENTRYPOINT\" ],
+	fi
+        echo \"essential\": true,
+	echo \"memory\": $MEMORY,
+	echo \"name\": \"$NAME\",
+	echo \"cpu\": $CPU_SHARES,
+	echo \"image\": \"$IMAGE\"
+}
+
+function generateVolumes() {
+	echo  \"volumes\": [
+	COMMA=
+	for VOLUME in ${VOLUMES[@]}; do
+		[ -n "$COMMA" ] && echo ','
+		HOSTPATH=$(echo $VOLUME | awk -F: '{print $1}')
+		VOLHOSTNAME=$(echo $HOSTPATH | sed -e 's/^\///' -e 's/\//-/g')
+		COMMA=1
+		echo {
+		  echo \"name\": \"$VOLHOSTNAME\",
+		  echo \"host\": {
+			  echo \"sourcePath\": \"$HOSTPATH\"
+		echo }
+		echo }
+	done
+	echo ]
+}
+
+function registerTask() {
+        TASK_DEF="$(aws ecs register-task-definition --cli-input-json "$TASK_DEF")"
+}
+
+function serviceExists() {
+	local EXIST=$(aws ecs list-services --cluster $CLUSTER | jq -r .serviceArns[] | grep "/$NAME\$")
+	test -n "$EXIST"
+}
+
+function runService() {
+
+	if serviceExists ; then
+		aws ecs update-service --cluster $CLUSTER --service $NAME --task-definition "$(getTaskArn)" --desired-count $NUMBER_OF_INSTANCES
+	else
+		aws ecs create-service --cluster $CLUSTER --service-name $NAME --task-definition "$(getTaskArn)" --desired-count $NUMBER_OF_INSTANCES
+	fi
+}
+
+function getTaskArn() {
+	echo "$TASK_DEF" | jq -r .taskDefinition.taskDefinitionArn
+}
+
+function runTask() {
+	aws ecs run-task --cluster $CLUSTER --task-definition "$(getTaskArn)" --count $NUMBER_OF_INSTANCES
+}
+
+
+function checkPreconditions() {
+	if  [ -z "$(which jq 2>/dev/null)" ] ; then
+		echo "ERROR: the executable jq was not found on the path." >&2
+		exit 1
+	fi
+
+	if  [ -z "$(which aws 2>/dev/null)" ] ; then
+		echo "ERROR: the  aws CLI was not found on the path." >&2
+		exit 1
+	fi
+
+	if ! aws iam get-user > /dev/null ; then
+		echo "ERROR: failed to connect to AWS." >&2
+		exit 1
+	fi
+
+	if ! docker ps >/dev/null ; then
+		echo "ERROR: failed to connect to docker deamon." >&2
+		exit 1
+	fi
+
+	if [ -z "$IMAGE" ] ; then
+		echo "ERROR: missing image to run." 2>&1
+		exit 1
+	fi
+
+	if [ -z "$NAME" ] ; then
+		NAME=$(echo "$IMAGE" | sed -e 's/[^\/]*\///g' -e 's/:.*$//')
+		if [ -n "$NAME" ] ; then
+			echo "WARN: using $NAME as name for this task definition." >&2
+		else
+			echo "ERROR: no name could be derived for this Docker task definition" >&2
+			exit 1
+		fi
+	fi
+}
+
+parseDockerRunCmd "$@"
+checkPreconditions
+
+generateTaskDef 
+if [ -n "$GENERATE_ONLY" ] ; then 
+	echo "$TASK_DEF"
+else
+	registerTask
+	if [ $RUN_AS_SERVICE -eq 1 ] ; then
+		runService
+	else
+		runTask
+	fi
+fi

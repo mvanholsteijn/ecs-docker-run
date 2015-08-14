@@ -1,0 +1,32 @@
+{
+  "family": "oraxe",
+  "containerDefinitions": [
+    {
+      "volumesFrom": [],
+      "portMappings": [
+        {
+          "hostPort": 0,
+          "containerPort": 1521
+        },
+        {
+          "hostPort": 0,
+          "containerPort": 22
+        },
+        {
+          "hostPort": 0,
+          "containerPort": 8080
+        }
+      ],
+      "command": [],
+      "environment": [],
+      "links": [],
+      "mountPoints": [],
+      "essential": true,
+      "memory": 256,
+      "name": "oraxe",
+      "cpu": 100,
+      "image": "oraxe"
+    }
+  ],
+  "volumes": []
+}

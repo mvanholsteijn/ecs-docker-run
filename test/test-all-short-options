@@ -1,0 +1,23 @@
+#!/bin/bash
+bash ../bin/ecs-docker-run \
+  --generate-only \
+  --cluster my-own-cluster \
+  --number-of-instances 3 \
+  -m=256 \
+  -c=512 \
+  --entrypoint=new-entry-point \
+  --rm \
+  --name=app-hellodb \
+  --env=SERVICE_NAME=hellodb \
+  --link=a:a \
+  -v /host/path:/container/path \
+  --volumes-from=container-a \
+  -p=:1000:100 \
+  cargonauts/helloworld-python \
+  /srv/helloworld-db.py	 \
+  | jq . > output/$(basename $0).json
+
+diff {output,expect}/$(basename $0).json 
+[ $? -ne 0 ] && echo ERROR: test $(basename $0) failed || echo INFO: test $(basename $0)  succeeded
+
+

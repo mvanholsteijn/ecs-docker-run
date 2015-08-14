@@ -1,0 +1,5 @@
+for test in test*; do
+	./$test  > /dev/null 2>&1
+	diff {output,expect}/$test.json 
+	[ $? -ne 0 ] && echo ERROR: test $test failed || echo INFO: test $test success
+done
