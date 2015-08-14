@@ -46,8 +46,6 @@ the ecs-docker-run utility has the following pre-requisites.
 ```
 $ ecs-docker-run --generate-only --name paas-monitor -P  mvanholsteijn/paas-monitor:latest
 
-
-```
 {
   "family": "paas-monitor",
   "containerDefinitions": [
@@ -87,7 +85,6 @@ $ ecs-docker-run \
 	--env RELEASE=v10 \
 	-P  \
 	mvanholsteijn/paas-monitor:latest
-
 ```
 
 ### Starting docker container as a service in ECS
@@ -104,7 +101,6 @@ $ ecs-docker-run \
 	--env RELEASE=v11 \
 	-P  \
 	mvanholsteijn/paas-monitor:latest
-
 ```
 
 ## Caveats
