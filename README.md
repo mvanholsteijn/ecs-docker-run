@@ -38,6 +38,10 @@ the ecs-docker-run utility has the following pre-requisites.
 - aws CLI installed version 1.7.44 or higher
 - aws connectivity configured (aws iam get-user)
 - docker connectivity configured (docker ps)
+- a running ECS cluster checkout
+
+If you do not have an ECS cluster running, the fastest way is to follow the
+instructions in [ecs-cloudformation/README](ecs-cloudformation/README.md)
 
 ## usage
 
