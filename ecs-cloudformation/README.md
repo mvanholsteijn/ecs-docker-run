@@ -1,7 +1,7 @@
-# ECS Cloudformation
+# Amazon Elastic Container Services CloudFormation quick start.
 
-This directory contains a ECS cloudformation template, which is a slightly modified version of the
-default ECS cluster that is created by the ECS first-run wizard.
+This directory contains an Amazon ECS cloudformation template, which is a slightly modified version of the
+default ECS cluster that is created by the ECS first-run wizard. 
 
 It creates a cluster with three machines and has a load balancer attached.
 
