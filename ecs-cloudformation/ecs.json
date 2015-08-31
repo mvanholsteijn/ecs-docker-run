@@ -131,7 +131,7 @@
     "AsgDesiredSize": {
       "Type": "Number",
       "Description": "Initial Desired Capacity of ECS Auto Scaling Group",
-      "Default": "3"
+      "Default": "6"
     },
     "EcsClusterName": {
       "Type": "String",
